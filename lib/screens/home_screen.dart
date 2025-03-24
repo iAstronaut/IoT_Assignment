@@ -10,7 +10,9 @@ import 'package:heart_rate_monitor/screens/measure_screen.dart';
 import 'package:heart_rate_monitor/screens/history_screen.dart';
 import 'package:heart_rate_monitor/screens/about_me_screen.dart';
 import 'package:heart_rate_monitor/screens/help_screen.dart';
+import 'package:heart_rate_monitor/screens/notification_screen.dart';
 import 'package:heart_rate_monitor/theme/app_theme.dart';
+import 'package:heart_rate_monitor/services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -25,16 +27,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   bool _isConnected = false;
   late AnimationController _animationController;
   late Animation<double> _animation;
+  final NotificationService _notificationService = NotificationService();
+  int _unreadNotifications = 3;
 
   // Activity data for the past week
   final List<Map<String, dynamic>> _weeklyActivityData = [
-    {'day': 'Mon', 'steps': 6500, 'calories': 320},
-    {'day': 'Tue', 'steps': 8200, 'calories': 410},
-    {'day': 'Wed', 'steps': 7800, 'calories': 380},
-    {'day': 'Thu', 'steps': 5400, 'calories': 290},
-    {'day': 'Fri', 'steps': 9100, 'calories': 450},
-    {'day': 'Sat', 'steps': 11200, 'calories': 520},
-    {'day': 'Sun', 'steps': 7400, 'calories': 370},
+    {'day': 'Mon', 'heartRate': 78, 'oxygen': 96},
+    {'day': 'Tue', 'heartRate': 82, 'oxygen': 95},
+    {'day': 'Wed', 'heartRate': 80, 'oxygen': 97},
+    {'day': 'Thu', 'heartRate': 75, 'oxygen': 94},
+    {'day': 'Fri', 'heartRate': 85, 'oxygen': 98},
+    {'day': 'Sat', 'heartRate': 90, 'oxygen': 92},
+    {'day': 'Sun', 'heartRate': 77, 'oxygen': 93},
   ];
 
   // Upcoming appointments
@@ -59,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _connectToDevice();
+    _initializeNotifications();
 
     // Initialize animation controller for smooth loading effects
     _animationController = AnimationController(
@@ -99,6 +104,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
+  Future<void> _initializeNotifications() async {
+    await _notificationService.initialize();
+  }
+
   void _handleLogout() {
     Navigator.pushReplacement(
       context,
@@ -131,12 +140,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               pinned: true,
               backgroundColor: AppTheme.primaryColor,
               flexibleSpace: FlexibleSpaceBar(
-                title: const Text(
-                  'Health Dashboard',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
+                title: Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Health Dashboard',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
                 ),
                 background: Container(
                   decoration: BoxDecoration(
@@ -149,40 +163,53 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       end: Alignment.bottomCenter,
                     ),
                   ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: -50,
-                        top: -20,
-                        child: CircleAvatar(
-                          radius: 100,
-                          backgroundColor: Colors.white.withOpacity(0.1),
-                        ),
-                      ),
-                      Positioned(
-                        left: -30,
-                        bottom: -30,
-                        child: CircleAvatar(
-                          radius: 80,
-                          backgroundColor: Colors.white.withOpacity(0.1),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
               leading: Builder(
                 builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.white),
+                  icon: const Icon(Icons.menu),
                   onPressed: () {
                     Scaffold.of(context).openDrawer();
                   },
                 ),
               ),
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-                  onPressed: () {},
+                Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const NotificationScreen()),
+                        );
+                      },
+                    ),
+                    if (_unreadNotifications > 0)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            _unreadNotifications.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 IconButton(
                   icon: const Icon(Icons.person_outline, color: Colors.white),
@@ -225,7 +252,97 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   const SizedBox(height: 24),
 
+                  // Health Status
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Health Status',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              size: 16,
+                              color: Colors.green,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Good',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        _buildHealthStatusItem(
+                          'Heart Rate',
+                          '98 bpm',
+                          'Normal',
+                          Colors.green,
+                          Icons.favorite,
+                        ),
+                        const Divider(height: 24),
+                        _buildHealthStatusItem(
+                          'Oxygen Level',
+                          '98%',
+                          'Normal',
+                          Colors.green,
+                          Icons.air,
+                        ),
+                        const Divider(height: 24),
+                        _buildHealthStatusItem(
+                          'Blood Pressure',
+                          '120/80',
+                          'Normal',
+                          Colors.green,
+                          Icons.favorite,
+                        ),
+                        const Divider(height: 24),
+                        _buildHealthStatusItem(
+                          'Blood Sugar',
+                          '95 mg/dL',
+                          'Normal',
+                          Colors.green,
+                          Icons.water_drop,
+                        ),
+                      ],
+                    ),
+                  ),
+
                   // Weekly Activity Section
+                  const SizedBox(height: 24),
                   const Text(
                     'Weekly Activity',
                     style: TextStyle(
@@ -256,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       TextButton(
                         onPressed: () {},
                         child: const Text(
-                          'View All',
+                          'Show More',
                           style: TextStyle(
                             color: AppTheme.primaryColor,
                             fontWeight: FontWeight.w600,
@@ -267,6 +384,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   const SizedBox(height: 8),
                   ..._buildAppointmentsList(),
+
+                  // Health Tips
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Health Tips',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHealthTips(),
+                  const SizedBox(height: 24),
                 ]),
               ),
             ),
@@ -307,7 +438,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       child: Row(
         children: [
           Icon(
-            _isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+            _isConnected ? Icons.devices : Icons.devices_outlined,
             size: 16,
             color: _isConnected ? Colors.green : Colors.red,
           ),
@@ -331,9 +462,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          _buildMetricCard('Blood Sugar', '80', 'mg/dL', Icons.bloodtype, Colors.orangeAccent, size),
           _buildMetricCard('Heart Rate', '98', 'bpm', Icons.favorite, Colors.redAccent, size),
-          _buildMetricCard('Blood Pressure', '102/72', 'mmHg', Icons.water_drop, Colors.blueAccent, size),
           _buildMetricCard('Oxygen', '98', '%', Icons.air, Colors.tealAccent.shade700, size),
         ],
       ),
@@ -342,6 +471,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildMetricCard(String title, String value, String unit, IconData icon, Color color, Size size) {
     final cardWidth = size.width * 0.23;
+    final double numericValue = double.tryParse(value) ?? 0;
+    final String status = _getHealthStatus(title, numericValue);
+    final Color statusColor = _getStatusColor(status);
 
     return Container(
       width: cardWidth,
@@ -405,14 +537,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.15),
+              color: statusColor.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Text(
-              'Normal',
+            child: Text(
+              status,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.green,
+                color: statusColor,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -422,9 +554,85 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  String _getHealthStatus(String metric, double value) {
+    String status;
+    switch (metric) {
+      case 'Heart Rate':
+        if (value < 60) {
+          status = 'Low';
+          _notificationService.showHealthAlert(
+            title: 'Low Heart Rate Alert',
+            body: 'Your heart rate is below normal. Please take a break and rest.',
+          );
+        } else if (value > 100) {
+          status = 'High';
+          _notificationService.showHealthAlert(
+            title: 'High Heart Rate Alert',
+            body: 'Your heart rate is above normal. Please slow down and rest.',
+          );
+        } else {
+          status = 'Normal';
+        }
+        break;
+      case 'Oxygen':
+        if (value < 95) {
+          status = 'Low';
+          _notificationService.showHealthAlert(
+            title: 'Low Oxygen Level Alert',
+            body: 'Your oxygen level is below normal. Please practice deep breathing.',
+          );
+        } else if (value > 100) {
+          status = 'High';
+          _notificationService.showHealthAlert(
+            title: 'High Oxygen Level Alert',
+            body: 'Your oxygen level is above normal. Please check your device.',
+          );
+        } else {
+          status = 'Normal';
+        }
+        break;
+      case 'Blood Pressure':
+        status = 'Normal';
+        break;
+      case 'Blood Sugar':
+        if (value < 70) {
+          status = 'Low';
+          _notificationService.showHealthAlert(
+            title: 'Low Blood Sugar Alert',
+            body: 'Your blood sugar is below normal. Please have a snack.',
+          );
+        } else if (value > 140) {
+          status = 'High';
+          _notificationService.showHealthAlert(
+            title: 'High Blood Sugar Alert',
+            body: 'Your blood sugar is above normal. Please monitor your diet.',
+          );
+        } else {
+          status = 'Normal';
+        }
+        break;
+      default:
+        status = 'Normal';
+    }
+    return status;
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Low':
+        return Colors.orange;
+      case 'High':
+        return Colors.red;
+      case 'Normal':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
   Widget _buildActivityChart() {
     return Container(
-      height: 250,
+      height: 300,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -455,7 +663,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    'Steps',
+                    'Heart Rate',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.black54,
@@ -472,7 +680,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    'Calories',
+                    'Oxygen',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.black54,
@@ -501,7 +709,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: 12000,
+                maxY: 100,
                 minY: 0,
                 groupsSpace: 20,
                 barTouchData: BarTouchData(
@@ -511,7 +719,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     tooltipRoundedRadius: 8,
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       String value = rod.toY.round().toString();
-                      String label = rodIndex == 0 ? 'Steps' : 'Calories';
+                      String label = rodIndex == 0 ? 'Heart Rate' : 'Oxygen';
                       return BarTooltipItem(
                         '$label: $value',
                         const TextStyle(
@@ -551,7 +759,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     sideTitles: SideTitles(
                       showTitles: true,
                       getTitlesWidget: (value, meta) {
-                        if (value % 3000 != 0) return const SizedBox();
+                        if (value % 20 != 0) return const SizedBox();
                         return Padding(
                           padding: const EdgeInsets.only(right: 8.0),
                           child: Text(
@@ -580,16 +788,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 borderData: FlBorderData(show: false),
                 barGroups: List.generate(_weeklyActivityData.length, (index) {
-                  // Ensure index is valid
-                  if (index < 0 || index >= _weeklyActivityData.length) {
-                    return BarChartGroupData(x: index);
-                  }
-
                   return BarChartGroupData(
                     x: index,
                     barRods: [
                       BarChartRodData(
-                        toY: _weeklyActivityData[index]['steps'].toDouble(),
+                        toY: _weeklyActivityData[index]['heartRate'].toDouble(),
                         gradient: const LinearGradient(
                           colors: [AppTheme.primaryColor, Color(0xFF8F6BFD)],
                           begin: Alignment.bottomCenter,
@@ -602,7 +805,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         ),
                       ),
                       BarChartRodData(
-                        toY: _weeklyActivityData[index]['calories'].toDouble() * 20, // Scale for visibility
+                        toY: _weeklyActivityData[index]['oxygen'].toDouble(),
                         gradient: const LinearGradient(
                           colors: [AppTheme.secondaryColor, Color(0xFFFF9A9E)],
                           begin: Alignment.bottomCenter,
@@ -781,6 +984,96 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
       );
     }).toList();
+  }
+
+  Widget _buildHealthTips() {
+    final List<Map<String, dynamic>> tips = [
+      {
+        'icon': Icons.favorite,
+        'title': 'Heart Rate Tips',
+        'description': 'Maintain a healthy heart rate by staying active and managing stress.',
+        'color': Colors.redAccent,
+      },
+      {
+        'icon': Icons.air,
+        'title': 'Oxygen Level Tips',
+        'description': 'Practice deep breathing exercises to improve oxygen levels.',
+        'color': Colors.tealAccent.shade700,
+      },
+      {
+        'icon': Icons.water_drop,
+        'title': 'Blood Pressure Tips',
+        'description': 'Reduce salt intake and exercise regularly to maintain healthy blood pressure.',
+        'color': Colors.blueAccent,
+      },
+    ];
+
+    return Container(
+      height: 180,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: tips.length,
+        itemBuilder: (context, index) {
+          final tip = tips[index];
+          return Container(
+            width: 280,
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: tip['color'].withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          tip['icon'],
+                          color: tip['color'],
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        tip['title'],
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    tip['description'],
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black54,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildDrawer() {
@@ -971,6 +1264,69 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             )
           : null,
       onTap: onTap,
+    );
+  }
+
+  Widget _buildHealthStatusItem(
+    String title,
+    String value,
+    String status,
+    Color statusColor,
+    IconData icon,
+  ) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: statusColor.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            color: statusColor,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black54,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: statusColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            status,
+            style: TextStyle(
+              color: statusColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
