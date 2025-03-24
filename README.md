@@ -26,4 +26,4 @@ The **Heart Rate Monitor** app is built with **Flutter** and integrates with IoT
 ### Setup Instructions:
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/heart_rate_monitor.git
+   git clone https://github.com/iAstronaut/heart_rate_monitor.git
