@@ -1,45 +1,33 @@
 import 'package:flutter/material.dart';
 
 class HeartRateData {
-  final int bpm;
+  final int value;
   final DateTime timestamp;
   final String status;
-  final double? systolic;
-  final double? diastolic;
-  final double? oxygenLevel;
-  final String deviceId;
+  final String statusMessage;
 
   HeartRateData({
-    required this.bpm,
+    required this.value,
     required this.timestamp,
-    required this.status,
-    required this.deviceId,
-    this.systolic,
-    this.diastolic,
-    this.oxygenLevel,
+    this.status = 'normal',
+    this.statusMessage = '',
   });
 
   factory HeartRateData.fromJson(Map<String, dynamic> json) {
     return HeartRateData(
-      bpm: json['bpm'] as int,
+      value: json['value'] as int,
       timestamp: DateTime.parse(json['timestamp'] as String),
       status: json['status'] as String,
-      deviceId: json['device_id'] as String,
-      systolic: json['systolic']?.toDouble(),
-      diastolic: json['diastolic']?.toDouble(),
-      oxygenLevel: json['oxygen_level']?.toDouble(),
+      statusMessage: json['statusMessage'] as String,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'bpm': bpm,
+      'value': value,
       'timestamp': timestamp.toIso8601String(),
       'status': status,
-      'device_id': deviceId,
-      'systolic': systolic,
-      'diastolic': diastolic,
-      'oxygen_level': oxygenLevel,
+      'statusMessage': statusMessage,
     };
   }
 
@@ -58,18 +46,17 @@ class HeartRateData {
     }
   }
 
-  String get statusMessage {
-    switch (status.toLowerCase()) {
-      case 'normal':
-        return 'Your heart rate is within normal range';
-      case 'elevated':
-        return 'Your heart rate is slightly elevated';
-      case 'high':
-        return 'Your heart rate is high, please take precautions';
-      case 'low':
-        return 'Your heart rate is low, please take precautions';
-      default:
-        return 'Status unknown';
-    }
+  String getStatus() {
+    if (value < 60) return 'low';
+    if (value < 100) return 'normal';
+    if (value < 140) return 'elevated';
+    return 'high';
+  }
+
+  String getStatusMessage() {
+    if (value < 60) return 'Heart rate is below normal range';
+    if (value < 100) return 'Heart rate is within normal range';
+    if (value < 140) return 'Heart rate is slightly elevated';
+    return 'Heart rate is high, consider resting';
   }
 }

@@ -1,19 +1,20 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
 class AnimatedBackground extends StatefulWidget {
+  const AnimatedBackground({Key? key}) : super(key: key);
+
   @override
-  _AnimatedBackgroundState createState() => _AnimatedBackgroundState();
+  State<AnimatedBackground> createState() => _AnimatedBackgroundState();
 }
 
-class _AnimatedBackgroundState extends State<AnimatedBackground> with TickerProviderStateMixin {
-  late List<ParticleModel> particles;
+class _AnimatedBackgroundState extends State<AnimatedBackground>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    particles = List.generate(20, (index) => ParticleModel());
     _controller = AnimationController(
       duration: const Duration(seconds: 10),
       vsync: this,
@@ -32,10 +33,7 @@ class _AnimatedBackgroundState extends State<AnimatedBackground> with TickerProv
       animation: _controller,
       builder: (context, child) {
         return CustomPaint(
-          painter: ParticlePainter(
-            particles: particles,
-            animation: _controller,
-          ),
+          painter: _BackgroundPainter(_controller.value),
           child: Container(),
         );
       },
@@ -43,53 +41,55 @@ class _AnimatedBackgroundState extends State<AnimatedBackground> with TickerProv
   }
 }
 
-class ParticleModel {
-  late Offset position;
-  late double speed;
-  late double theta;
-  late double radius;
+class _BackgroundPainter extends CustomPainter {
+  final double animationValue;
 
-  ParticleModel() {
-    Random random = Random();
-    position = Offset(
-      random.nextDouble() * 400,
-      random.nextDouble() * 800,
-    );
-    speed = 1.0 + random.nextDouble() * 2.0;
-    theta = random.nextDouble() * 2 * pi;
-    radius = 2.0 + random.nextDouble() * 3.0;
-  }
-}
-
-class ParticlePainter extends CustomPainter {
-  final List<ParticleModel> particles;
-  final Animation<double> animation;
-
-  ParticlePainter({
-    required this.particles,
-    required this.animation,
-  });
+  _BackgroundPainter(this.animationValue);
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.1)
+      ..color = Colors.blue.withOpacity(0.3)
       ..style = PaintingStyle.fill;
 
-    particles.forEach((particle) {
-      var progress = animation.value;
-      var dx = particle.speed * cos(particle.theta) * progress * 100;
-      var dy = particle.speed * sin(particle.theta) * progress * 100;
+    final path = Path();
+    final width = size.width;
+    final height = size.height;
 
-      var offset = Offset(
-        (particle.position.dx + dx) % size.width,
-        (particle.position.dy + dy) % size.height,
+    // First wave
+    path.moveTo(0, height * 0.8);
+    for (var i = 0.0; i <= width; i++) {
+      path.lineTo(
+        i,
+        height * 0.8 +
+            math.sin((i / width * 2 * math.pi) + (animationValue * 2 * math.pi)) *
+                20,
       );
+    }
+    path.lineTo(width, height);
+    path.lineTo(0, height);
+    path.close();
+    canvas.drawPath(path, paint);
 
-      canvas.drawCircle(offset, particle.radius, paint);
-    });
+    // Second wave
+    final path2 = Path();
+    paint.color = Colors.blue.withOpacity(0.2);
+    path2.moveTo(0, height * 0.85);
+    for (var i = 0.0; i <= width; i++) {
+      path2.lineTo(
+        i,
+        height * 0.85 +
+            math.cos((i / width * 2 * math.pi) +
+                    (animationValue * 2 * math.pi * 1.5)) *
+                15,
+      );
+    }
+    path2.lineTo(width, height);
+    path2.lineTo(0, height);
+    path2.close();
+    canvas.drawPath(path2, paint);
   }
 
   @override
-  bool shouldRepaint(ParticlePainter oldDelegate) => true;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

@@ -1,114 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:heart_rate_monitor/theme/app_theme.dart';
 
-class GradientButton extends StatefulWidget {
+class GradientButton extends StatelessWidget {
+  final VoidCallback? onPressed;
   final String text;
-  final VoidCallback onPressed;
-  final bool isLoading;
   final IconData? icon;
-  final Gradient? gradient;
+  final bool isLoading;
 
   const GradientButton({
     Key? key,
-    required this.text,
     required this.onPressed,
-    this.isLoading = false,
+    required this.text,
     this.icon,
-    this.gradient,
+    this.isLoading = false,
   }) : super(key: key);
 
   @override
-  _GradientButtonState createState() => _GradientButtonState();
-}
-
-class _GradientButtonState extends State<GradientButton> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  bool _isPressed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 150),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onTapDown(TapDownDetails details) {
-    setState(() => _isPressed = true);
-    _controller.forward();
-  }
-
-  void _onTapUp(TapUpDetails details) {
-    setState(() => _isPressed = false);
-    _controller.reverse();
-    widget.onPressed();
-  }
-
-  void _onTapCancel() {
-    setState(() => _isPressed = false);
-    _controller.reverse();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: widget.isLoading ? null : _onTapDown,
-      onTapUp: widget.isLoading ? null : _onTapUp,
-      onTapCancel: widget.isLoading ? null : _onTapCancel,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            gradient: widget.gradient ?? AppTheme.secondaryGradient,
-            borderRadius: BorderRadius.circular(AppTheme.buttonBorderRadius),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: Center(
-              child: widget.isLoading
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (widget.icon != null) ...[
-                          Icon(widget.icon, color: Colors.white),
-                          const SizedBox(width: 8),
-                        ],
-                        Text(
-                          widget.text,
-                          style: AppTheme.buttonTextStyle,
-                        ),
-                      ],
-                    ),
-            ),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: onPressed == null
+            ? LinearGradient(
+                colors: [
+                  Colors.grey.shade300,
+                  Colors.grey.shade400,
+                ],
+              )
+            : AppTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: onPressed == null
+            ? null
+            : [
+                BoxShadow(
+                  color: AppTheme.primaryColor.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+      ),
+      child: MaterialButton(
+        onPressed: onPressed,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
+        child: isLoading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, color: Colors.white),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    text,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

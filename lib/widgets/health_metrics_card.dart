@@ -22,7 +22,7 @@ class HealthMetricsCard extends StatelessWidget {
         duration: const Duration(milliseconds: 300),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.95),
+          color: const Color.fromARGB(255, 117, 174, 243).withOpacity(0.95),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
