@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +14,7 @@ import 'package:heart_rate_monitor/screens/help_screen.dart';
 import 'package:heart_rate_monitor/screens/notification_screen.dart';
 import 'package:heart_rate_monitor/theme/app_theme.dart';
 import 'package:heart_rate_monitor/services/notification_service.dart';
+import 'package:heart_rate_monitor/services/coreiot_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -22,13 +24,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
-  final MockIoTService _iotService = MockIoTService();
+  final CoreIoTService _coreIoTService = CoreIoTService();
   final List<HeartRateData> _heartRateData = [];
   bool _isConnected = false;
   late AnimationController _animationController;
   late Animation<double> _animation;
   final NotificationService _notificationService = NotificationService();
   int _unreadNotifications = 3;
+  late StreamSubscription<Map<String, dynamic>> _dataSubscription;
+  Map<String, dynamic> _latestData = {};
 
   // Activity data for the past week
   final List<Map<String, dynamic>> _weeklyActivityData = [
@@ -62,10 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _connectToDevice();
-    _initializeNotifications();
-
-    // Initialize animation controller for smooth loading effects
+    _initializeServices();
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -79,29 +80,46 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _animationController.forward();
   }
 
-  Future<void> _connectToDevice() async {
-    try {
-      await _iotService.connect('mock-device-001');
-      if (mounted) {
-        setState(() => _isConnected = true);
-      }
+  Future<void> _initializeServices() async {
+    await _coreIoTService.initialize();
+    await _initializeNotifications();
 
-      _iotService.dataStream?.listen((data) {
-        if (mounted) {
-          setState(() {
-            _heartRateData.add(data);
-            if (_heartRateData.length > 20) {
-              _heartRateData.removeAt(0);
-            }
-          });
-        }
-      });
+    // Subscribe to real-time data
+    _dataSubscription = _coreIoTService.dataStream!.listen((data) {
+      if (mounted) {
+        setState(() {
+          _latestData = data;
+          _isConnected = true;
+          _updateHealthMetrics(data);
+        });
+      }
+    });
+
+    // Get initial data
+    try {
+      final latestData = await _coreIoTService.getLatestData();
+      if (mounted) {
+        setState(() {
+          _latestData = latestData;
+          _isConnected = true;
+          _updateHealthMetrics(latestData);
+        });
+      }
     } catch (e) {
-      debugPrint('Failed to connect: $e');
+      print('Failed to get initial data: $e');
       if (mounted) {
         setState(() => _isConnected = false);
       }
     }
+  }
+
+  void _updateHealthMetrics(Map<String, dynamic> data) {
+    // Update your UI metrics based on the data received
+    // Example:
+    // setState(() {
+    //   _heartRate = data['heart_rate'];
+    //   _oxygenLevel = data['oxygen_level'];
+    // });
   }
 
   Future<void> _initializeNotifications() async {
@@ -117,7 +135,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
-    _iotService.dispose();
+    _dataSubscription.cancel();
+    _coreIoTService.dispose();
     _animationController.dispose();
     super.dispose();
   }

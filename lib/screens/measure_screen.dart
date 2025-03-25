@@ -1,38 +1,47 @@
 import 'package:flutter/material.dart';
-import 'package:heart_rate_monitor/models/heart_rate_data.dart';
-import 'package:heart_rate_monitor/services/mock_iot_service.dart';
-import 'package:heart_rate_monitor/widgets/heart_rate_chart.dart';
-import 'package:heart_rate_monitor/widgets/glass_card.dart';
-import 'package:heart_rate_monitor/theme/app_theme.dart';
+import 'package:fl_chart/fl_chart.dart';
+import '../services/coreiot_service.dart';
 
 class MeasureScreen extends StatefulWidget {
-  const MeasureScreen({Key? key}) : super(key: key);
+  const MeasureScreen({super.key});
 
   @override
-  _MeasureScreenState createState() => _MeasureScreenState();
+  State<MeasureScreen> createState() => _MeasureScreenState();
 }
 
 class _MeasureScreenState extends State<MeasureScreen> {
-  final MockIoTService _iotService = MockIoTService();
-  final List<HeartRateData> _heartRateData = [];
+  final CoreIoTService _coreIoTService = CoreIoTService();
   bool _isConnected = false;
-  String _selectedTimeRange = 'Real-time';
+  List<FlSpot> _heartbeatData = [];
+  List<FlSpot> _oxygenData = [];
+  Map<String, dynamic> _currentData = {
+    'oxygen': 0.0,
+    'heartbeat': 0,
+    'timestamp': 0
+  };
 
   @override
   void initState() {
     super.initState();
-    _connectToDevice();
+    _initializeMeasurement();
   }
 
-  Future<void> _connectToDevice() async {
-    await _iotService.connect('mock-device-001');
-    setState(() => _isConnected = true);
-
-    _iotService.dataStream?.listen((data) {
+  Future<void> _initializeMeasurement() async {
+    await _coreIoTService.initialize();
+    _coreIoTService.dataStream?.listen((data) {
       setState(() {
-        _heartRateData.add(data);
-        if (_heartRateData.length > 20) {
-          _heartRateData.removeAt(0);
+        _currentData = data;
+        _isConnected = _coreIoTService.isConnected;
+
+        // Update chart data
+        final timestamp = DateTime.now().millisecondsSinceEpoch.toDouble();
+        _heartbeatData.add(FlSpot(timestamp, _currentData['heartbeat'].toDouble()));
+        _oxygenData.add(FlSpot(timestamp, _currentData['oxygen'].toDouble()));
+
+        // Keep only last 30 data points
+        if (_heartbeatData.length > 30) {
+          _heartbeatData.removeAt(0);
+          _oxygenData.removeAt(0);
         }
       });
     });
@@ -40,220 +49,173 @@ class _MeasureScreenState extends State<MeasureScreen> {
 
   @override
   void dispose() {
-    _iotService.dispose();
+    _coreIoTService.dispose();
     super.dispose();
-  }
-
-  List<HeartRateData> _getFilteredData() {
-    final now = DateTime.now();
-    switch (_selectedTimeRange) {
-      case '1 Hour':
-        return _heartRateData.where((data) => data.timestamp.isAfter(now.subtract(const Duration(hours: 1)))).toList();
-      case '6 Hours':
-        return _heartRateData.where((data) => data.timestamp.isAfter(now.subtract(const Duration(hours: 6)))).toList();
-      case '12 Hours':
-        return _heartRateData.where((data) => data.timestamp.isAfter(now.subtract(const Duration(hours: 12)))).toList();
-      case '24 Hours':
-        return _heartRateData.where((data) => data.timestamp.isAfter(now.subtract(const Duration(hours: 24)))).toList();
-      default:
-        return _heartRateData;
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Measure Heart Rate'),
-        backgroundColor: AppTheme.primaryColor,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              _showSettingsMenu(context);
-            },
-          ),
-        ],
+        title: const Text('Measure'),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
       ),
-      body: Column(
-        children: [
-          _buildTimeRangeSelector(),
-          Expanded(
-            child: GlassCard(
-              margin: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Current Heart Rate',
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _heartRateData.isEmpty
-                                  ? '--'
-                                  : '${_heartRateData.last.value} BPM',
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 48,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _isConnected ? Colors.green : Colors.red,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _isConnected ? 'Connected' : 'Disconnected',
-                                  style: const TextStyle(
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _getHeartRateStatus(_heartRateData.isEmpty
-                                  ? 0
-                                  : _heartRateData.last.value),
-                              style: TextStyle(
-                                color: _getStatusColor(_heartRateData.isEmpty
-                                    ? 0
-                                    : _heartRateData.last.value),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Connection Status Card
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isConnected ? Colors.green : Colors.red,
+                      ),
                     ),
-                  ),
-                  const Divider(color: Colors.black26),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: _heartRateData.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Waiting for data...',
-                                style: TextStyle(color: Colors.black54),
-                              ),
-                            )
-                          : HeartRateChart(
-                              data: _getFilteredData(),
-                              timeRange: _selectedTimeRange,
-                            ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isConnected ? 'Connected' : 'Disconnected',
+                      style: TextStyle(
+                        color: _isConnected ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            const SizedBox(height: 16),
 
-  Widget _buildTimeRangeSelector() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildTimeRangeButton('Real-time'),
-          _buildTimeRangeButton('1 Hour'),
-          _buildTimeRangeButton('6 Hours'),
-          _buildTimeRangeButton('12 Hours'),
-          _buildTimeRangeButton('24 Hours'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeRangeButton(String timeRange) {
-    return ElevatedButton(
-      onPressed: () {
-        setState(() {
-          _selectedTimeRange = timeRange;
-        });
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _selectedTimeRange == timeRange
-            ? AppTheme.secondaryColor
-            : Colors.grey,
-      ),
-      child: Text(
-        timeRange,
-        style: const TextStyle(color: Colors.white),
-      ),
-    );
-  }
-
-  String _getHeartRateStatus(int bpm) {
-    if (bpm == 0) return 'No Reading';
-    if (bpm < 60) return 'Low';
-    if (bpm < 100) return 'Normal';
-    if (bpm < 140) return 'Elevated';
-    return 'High';
-  }
-
-  Color _getStatusColor(int bpm) {
-    if (bpm == 0) return Colors.black54;
-    if (bpm < 60) return Colors.blue;
-    if (bpm < 100) return Colors.green;
-    if (bpm < 140) return Colors.orange;
-    return Colors.red;
-  }
-
-  void _showSettingsMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return Wrap(
-          children: <Widget>[
-            ListTile(
-              leading: const Icon(Icons.info),
-              title: const Text('App Version'),
-              onTap: () {
-                // Display app version
-                Navigator.pop(context);
-              },
+            // Current Values Cards
+            Row(
+              children: [
+                Expanded(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Oxygen Level',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${_currentData['oxygen'].toStringAsFixed(1)}%',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Heart Rate',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${_currentData['heartbeat'].toStringAsFixed(0)} BPM',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Logout'),
-              onTap: () {
-                // Handle logout
-                Navigator.pop(context);
-              },
+            const SizedBox(height: 16),
+
+            // Charts
+            Expanded(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Real-time Data',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: LineChart(
+                          LineChartData(
+                            gridData: const FlGridData(show: true),
+                            titlesData: FlTitlesData(
+                              leftTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: true),
+                              ),
+                              bottomTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: true),
+                              ),
+                              rightTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              topTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                            ),
+                            borderData: FlBorderData(show: true),
+                            lineBarsData: [
+                              LineChartBarData(
+                                spots: _heartbeatData,
+                                isCurved: true,
+                                color: Colors.red,
+                                barWidth: 2,
+                                dotData: const FlDotData(show: false),
+                              ),
+                              LineChartBarData(
+                                spots: _oxygenData,
+                                isCurved: true,
+                                color: Colors.blue,
+                                barWidth: 2,
+                                dotData: const FlDotData(show: false),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
