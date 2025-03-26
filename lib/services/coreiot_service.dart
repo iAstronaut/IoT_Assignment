@@ -5,7 +5,7 @@ import 'auth_service.dart';
 
 class CoreIoTService {
   static const String baseUrl = 'https://app.coreiot.io/api';
-  static const String deviceId = '2b314740-090d-11f0-a887-6d1a184f2bb5';
+  // static const String deviceId = '2b314740-090d-11f0-a887-6d1a184f2bb5';
 
   StreamController<Map<String, dynamic>>? _dataStreamController;
   Timer? _pollingTimer;
