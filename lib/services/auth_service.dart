@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
+import 'package:http/http.dart' as http;
 
 class AuthService {
   static const String _userKey = 'user';
   static User? _currentUser;
+  static const String coreIoTBaseUrl = 'https://app.coreiot.io/api';
+  static const String coreIoTUsername = 'an.nguyencse03@gmail.com';
+  static const String coreIOTPassword = '02121209An';
 
   // Get the current logged-in user
   static User? get currentUser => _currentUser;
@@ -36,6 +40,10 @@ class AuthService {
     await prefs.setString(_userKey, json.encode(user.toJson()));
 
     _currentUser = user;
+
+    // Call Core IoT API after successful login
+    await loginCoreIoT();
+
     return user;
   }
 
@@ -57,6 +65,10 @@ class AuthService {
     await prefs.setString(_userKey, json.encode(user.toJson()));
 
     _currentUser = user;
+
+    // Call Core IoT API after successful registration
+    await loginCoreIoT();
+
     return user;
   }
 
@@ -69,4 +81,31 @@ class AuthService {
 
   // Check if user is logged in
   static bool get isLoggedIn => _currentUser != null;
+
+  // Login to Core IoT
+  static Future<String?> loginCoreIoT() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$coreIoTBaseUrl/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'username': coreIoTUsername,
+          'password': coreIOTPassword,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('Core IoT Token: ${data['token']}');
+        return data['token'];
+      } else {
+        print('Core IoT Login failed: ${response.statusCode}');
+        print('Response: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('Core IoT Login error: $e');
+      return null;
+    }
+  }
 }

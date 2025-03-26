@@ -82,7 +82,7 @@ class _MeasureScreenState extends State<MeasureScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      _isConnected ? 'Connected' : 'Disconnected',
+                      _isConnected ? 'Connected to Core IoT' : 'Disconnected',
                       style: TextStyle(
                         color: _isConnected ? Colors.green : Colors.red,
                         fontWeight: FontWeight.bold,
@@ -103,6 +103,8 @@ class _MeasureScreenState extends State<MeasureScreen> {
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         children: [
+                          const Icon(Icons.air, size: 40, color: Colors.blue),
+                          const SizedBox(height: 8),
                           const Text(
                             'Oxygen Level',
                             style: TextStyle(
@@ -116,6 +118,7 @@ class _MeasureScreenState extends State<MeasureScreen> {
                             style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
+                              color: Colors.blue,
                             ),
                           ),
                         ],
@@ -130,6 +133,8 @@ class _MeasureScreenState extends State<MeasureScreen> {
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         children: [
+                          const Icon(Icons.favorite, size: 40, color: Colors.red),
+                          const SizedBox(height: 8),
                           const Text(
                             'Heart Rate',
                             style: TextStyle(
@@ -143,6 +148,7 @@ class _MeasureScreenState extends State<MeasureScreen> {
                             style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
+                              color: Colors.red,
                             ),
                           ),
                         ],
@@ -196,6 +202,10 @@ class _MeasureScreenState extends State<MeasureScreen> {
                                 color: Colors.red,
                                 barWidth: 2,
                                 dotData: const FlDotData(show: false),
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  color: Colors.red.withOpacity(0.1),
+                                ),
                               ),
                               LineChartBarData(
                                 spots: _oxygenData,
@@ -203,10 +213,23 @@ class _MeasureScreenState extends State<MeasureScreen> {
                                 color: Colors.blue,
                                 barWidth: 2,
                                 dotData: const FlDotData(show: false),
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  color: Colors.blue.withOpacity(0.1),
+                                ),
                               ),
                             ],
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildLegendItem('Heart Rate', Colors.red),
+                          const SizedBox(width: 24),
+                          _buildLegendItem('Oxygen', Colors.blue),
+                        ],
                       ),
                     ],
                   ),
@@ -216,6 +239,30 @@ class _MeasureScreenState extends State<MeasureScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.black54,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

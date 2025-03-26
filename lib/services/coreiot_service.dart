@@ -1,21 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:mqtt_client/mqtt_client.dart';
-import 'package:mqtt_client/mqtt_browser_client.dart';
+import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 
 class CoreIoTService {
-  // MQTT configuration for Adafruit IO
-  static const String mqttHost = 'io.adafruit.com';
-  static const int mqttPort = 1883; // MQTT port (use 8883 for SSL)
-  static const String username = 'nva212'; // Your Adafruit IO username
-  static const String aioKey = 'aio_GfPZ952hW1HIrBSs59FTl9fSxI56'; // Your AIO key
-  static const String oxygenFeed = 'nva212/feeds/oxygen'; // Oxygen feed
-  static const String heartbeatFeed = 'nva212/feeds/heartbeat'; // Heartbeat feed
+  static const String baseUrl = 'https://app.coreiot.io/api';
+  static const String deviceId = '2b314740-090d-11f0-a887-6d1a184f2bb5';
 
-  MqttBrowserClient? _client;
   StreamController<Map<String, dynamic>>? _dataStreamController;
-  Timer? _reconnectTimer;
+  Timer? _pollingTimer;
   bool _isConnected = false;
+  String? _token;
   Map<String, dynamic> _lastData = {
     'oxygen': 0.0,
     'heartbeat': 0,
@@ -25,111 +20,59 @@ class CoreIoTService {
   // Initialize the service and create a stream for real-time data
   Future<void> initialize() async {
     _dataStreamController = StreamController<Map<String, dynamic>>.broadcast();
-    await _connectMqtt();
-  }
 
-  // Connect to MQTT broker (Adafruit IO)
-  Future<void> _connectMqtt() async {
-    if (_client != null) {
-      _client!.disconnect();
-    }
+    // Get token from AuthService
+    _token = await AuthService.loginCoreIoT();
 
-    try {
-      print('Connecting to MQTT broker for Adafruit IO...'); // Debug log
-
-      // Create MQTT client for browser with WebSocket URL including access token
-      _client = MqttBrowserClient.withPort(
-        'wss://$mqttHost',
-        'client_id_${DateTime.now().millisecondsSinceEpoch}',
-        mqttPort
-      );
-
-      _client!.logging(on: true);
-      _client!.keepAlivePeriod = 60;
-      _client!.onConnected = _onConnected;
-      _client!.onDisconnected = _onDisconnected;
-      _client!.onSubscribed = _onSubscribed;
-      _client!.onSubscribeFail = _onSubscribeFail;
-      _client!.pongCallback = _pongCallback;
-
-      final connMessage = MqttConnectMessage()
-          .withClientIdentifier('client_id_${DateTime.now().millisecondsSinceEpoch}')
-          .withWillQos(MqttQos.atLeastOnce)
-          .authenticateAs(username, aioKey);
-
-      _client!.connectionMessage = connMessage;
-
-      try {
-        await _client!.connect();
-      } catch (e) {
-        print('Exception during connect: $e');
-        _client!.disconnect();
-        _scheduleReconnect();
-        return;
-      }
-
-      // Check connection status
-      if (_client!.connectionStatus!.state == MqttConnectionState.connected) {
-        print('MQTT client connected');
-        _isConnected = true;
-        _subscribeToFeeds();
-      } else {
-        print('ERROR: MQTT client connection failed - disconnecting, status is ${_client!.connectionStatus}');
-        _client!.disconnect();
-        _scheduleReconnect();
-        return;
-      }
-
-      // Listen for messages
-_client!.updates!.listen((List<MqttReceivedMessage<MqttMessage>> c) {
-  final MqttPublishMessage message = c[0].payload as MqttPublishMessage;
-  final payload = MqttPublishPayload.bytesToStringAsString(message.payload.message);
-  final topic = c[0].topic;
-
-  try {
-    final data = json.decode(payload);
-
-    if (topic == oxygenFeed) {
-      _lastData['oxygen'] = _parseDoubleValue(data['value']);
-    } else if (topic == heartbeatFeed) {
-      _lastData['heartbeat'] = _parseDoubleValue(data['value']);
-    }
-
-    _lastData['timestamp'] = DateTime.now().millisecondsSinceEpoch;
-    _dataStreamController?.add(_lastData);
-  } catch (e) {
-    print('Error parsing message: $e');
-  }
-});
-
-    } catch (e) {
-      print('Failed to connect to MQTT: $e');
+    if (_token != null) {
+      print('Token: $_token');
+      _isConnected = true;
+      _startPolling();
+    } else {
       _isConnected = false;
-      _scheduleReconnect();
     }
   }
 
-  void _onConnected() {
-    print('Connected to MQTT broker for Adafruit IO');
-    _isConnected = true;
-  }
+  // Start polling for telemetry data
+  void _startPolling() {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      try {
+        final response = await http.get(
+          Uri.parse('$baseUrl/plugins/telemetry/DEVICE/$deviceId/values/timeseries'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $_token',
+          },
+        );
 
-  void _onDisconnected() {
-    print('Disconnected from MQTT broker for Adafruit IO');
-    _isConnected = false;
-    _scheduleReconnect();
-  }
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
 
-  void _onSubscribed(String topic) {
-    print('Subscribed to topic: $topic');
-  }
+          try {
+            // Parse the response data
+            final oxygen = _parseDoubleValue(data['oxygen']?[0]?['value']);
+            final heartbeat = _parseDoubleValue(data['heartbeat']?[0]?['value']);
 
-  void _onSubscribeFail(String topic) {
-    print('Failed to subscribe to topic: $topic');
-  }
+            _lastData = {
+              'oxygen': oxygen,
+              'heartbeat': heartbeat,
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            };
 
-  void _pongCallback() {
-    print('Ping response received');
+            print('Oxygen: $oxygen, Heartbeat: $heartbeat');
+            _dataStreamController?.add(_lastData);
+          } catch (e) {
+            print('Error parsing message: $e');
+          }
+        } else {
+          _isConnected = false;
+          _scheduleReconnect();
+        }
+      } catch (e) {
+        _isConnected = false;
+        _scheduleReconnect();
+      }
+    });
   }
 
   double _parseDoubleValue(dynamic value) {
@@ -139,24 +82,16 @@ _client!.updates!.listen((List<MqttReceivedMessage<MqttMessage>> c) {
     return 0.0;
   }
 
-  // Subscribe to Adafruit IO feed topics
-  void _subscribeToFeeds() {
-    print('Subscribing to Adafruit IO feeds...');
-    _client!.subscribe(oxygenFeed, MqttQos.atLeastOnce);
-    _client!.subscribe(heartbeatFeed, MqttQos.atLeastOnce);
-  }
-
   void _scheduleReconnect() {
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), () {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer(const Duration(seconds: 5), () {
       if (!_isConnected) {
-        print('Attempting to reconnect...');
-        _connectMqtt();
+        initialize();
       }
     });
   }
 
-  // Get latest data from Adafruit IO
+  // Get latest data
   Map<String, dynamic> getLatestData() {
     return _lastData;
   }
@@ -168,8 +103,7 @@ _client!.updates!.listen((List<MqttReceivedMessage<MqttMessage>> c) {
 
   // Dispose resources
   void dispose() {
-    _reconnectTimer?.cancel();
-    _client?.disconnect();
+    _pollingTimer?.cancel();
     _dataStreamController?.close();
     _isConnected = false;
   }
