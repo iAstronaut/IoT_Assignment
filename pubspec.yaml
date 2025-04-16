@@ -1,0 +1,36 @@
+name: heart_pulse_app
+description: A heart rate monitoring application.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  http: ^1.1.0
+  shared_preferences: ^2.2.0
+  provider: ^6.0.5
+  fl_chart: ^0.63.0
+  intl: ^0.18.1
+  google_fonts: ^5.1.0
+  web_socket_channel: ^2.4.0
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  path_provider: ^2.1.0
+  permission_handler: ^10.4.3
+  flutter_blue_plus: ^1.5.2
+  flutter_local_notifications: ^15.1.0+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
