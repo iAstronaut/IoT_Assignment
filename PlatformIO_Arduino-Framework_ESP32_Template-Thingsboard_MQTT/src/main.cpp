@@ -13,10 +13,12 @@ constexpr uint8_t FIRMWARE_FAILURE_RETRIES = 12U;
 constexpr uint16_t FIRMWARE_PACKET_SIZE = 4096U;
 
 // constexpr char WIFI_SSID[] = "RD-SEAI_2.4G";
-// constexpr char WIFI_SSID[] = "ACLAB";
-// constexpr char WIFI_PASSWORD[] = "ACLAB2023";
-constexpr char WIFI_SSID[] = "GUEST";
-constexpr char WIFI_PASSWORD[] = "tmagroup2025";
+constexpr char WIFI_SSID[] = "ACLAB";
+constexpr char WIFI_PASSWORD[] = "ACLAB2023";
+// constexpr char WIFI_SSID[] = "GUEST";
+// constexpr char WIFI_PASSWORD[] = "tmagroup2025";
+// constexpr char WIFI_SSID[] = "PJAT";
+// constexpr char WIFI_PASSWORD[] = "phat123456";
 // constexpr char WIFI_SSID[] = "601H6-KH&KTMT";
 // constexpr char WIFI_PASSWORD[] = "svkhktmt";
 
@@ -27,8 +29,8 @@ constexpr char WIFI_PASSWORD[] = "tmagroup2025";
 // IPAddress gateway(192,168,1,1);
 // IPAddress subnet(255,255,255,0);
 
-// constexpr char DHT20_TOKEN[] = "EbIRoRYlaYzCqTzd1djN"; //new device
-constexpr char MAX30102_TOKEN[] = "test_heart_pulse"; //new device
+constexpr char MAX30102_TOKEN[] = "5f15h7jvxhjyv999cius"; //new device
+// constexpr char MAX30102_TOKEN[] = "test_heart_pulse"; //new device
 
 constexpr char THINGSBOARD_SERVER[] = "app.coreiot.io";
 constexpr uint16_t THINGSBOARD_PORT = 1883U;
@@ -391,14 +393,16 @@ void TaskHeartPulse_Oxy(void* pvParameters){
     }
     //After gathering 25 new samples recalculate HR and SP02
     maxim_heart_rate_and_oxygen_saturation(irBuffer, BUFFER_LEN, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
-    Serial.print(F(", HR="));
-    Serial.print(heartRate, DEC);
-    Serial.print(F(", HRvalid="));
-    Serial.print(validHeartRate, DEC);
-    Serial.print(F(", SPO2="));
-    Serial.print(spo2, DEC);
-    Serial.print(F(", SPO2Valid="));
-    Serial.println(validSPO2, DEC);
+    if((validHeartRate | validSPO2) & ((heartRate) < 161 & (heartRate > 39))){
+      Serial.print(F("HR="));
+      Serial.print(heartRate, DEC);
+      Serial.print(F(", HRvalid="));
+      Serial.print(validHeartRate, DEC);
+      Serial.print(F(", SPO2="));
+      Serial.print(spo2, DEC);
+      Serial.print(F(", SPO2Valid="));
+      Serial.println(validSPO2, DEC);
+    }
 
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
@@ -452,7 +456,8 @@ void ThingsBoardTask(void *pvParameters) {
       if(!subscribed){
         const std::array<RPC_Callback, MAX_RPC_SUBSCRIPTIONS> callbacks = {
         // Requires additional memory in the JsonDocument for the JsonDocument that will be copied into the response
-        RPC_Callback{ RPC_SENT_ATTR_SUCCESS_METHOD, processAttrSuccess }
+        // RPC_Callback{ RPC_SENT_ATTR_SUCCESS_METHOD, processAttrSuccess },
+        RPC_Callback{ RPC_SENT_TELE_SUCCESS_METHOD, processTeleSuccess }
         };
         // Perform a subscription. All consequent data processing will happen in
         // processTemperatureChange() and processSwitchChange() functions,
@@ -463,53 +468,55 @@ void ThingsBoardTask(void *pvParameters) {
       StaticJsonDocument<256> doc;
 
       if(validHeartRate){
-        doc["heart_R"] = heartRate;
+        // doc["heart_R"] = heartRate;
+        doc["heartbeat"] = heartRate;
       }
 
       if(validSPO2){
-        doc["SpO2"] = spo2;
+        doc["oxygen"] = spo2;
+        // doc["SpO2"] = spo2;
       }
       
-      if(validHeartRate | validSPO2){
+      if((validHeartRate | validSPO2) & ((heartRate) < 161 & (heartRate > 39))){
         // Serialize the JSON document
         char buffer[MAX_MESSAGE_SIZE];
         size_t len = serializeJson(doc, buffer, sizeof(buffer));
 
-        // Attempt to send telemetry data with retries
+        // Attempt to send data with retries
         const int maxRetries = 3;
         for (int attempt = 0; attempt < maxRetries; ++attempt) {
-          if (tb.sendAttributeJson(doc, len)) {
-              // serializeJson(doc, Serial);
-              // Serial.println();
-              // Serial.println("Telemery attr successfully");
-              break; // Exit if successful
-          } else {
-              Serial.println("Failed to send client attr, retrying...");
-              vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-              if(attempt == 2){
-
-                // Serial.println((int)time(NULL));
-                Serial.println("Failed to send client attr after multiple attempts");
-              }
-              
-          }
-          // if (tb.sendTelemetryJson(doc, len)) {
+          // if (tb.sendAttributeJson(doc, len)) {
           //     // serializeJson(doc, Serial);
           //     // Serial.println();
-          //     // Serial.println("Telemery sent successfully");
+          //     // Serial.println("Telemery attr successfully");
           //     break; // Exit if successful
           // } else {
-          //     Serial.println("Failed to send telemetry, retrying...");
+          //     Serial.println("Failed to send client attr, retrying...");
           //     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
           //     if(attempt == 2){
 
           //       // Serial.println((int)time(NULL));
-          //       Serial.println("Failed to send telemetry after multiple attempts");
+          //       Serial.println("Failed to send client attr after multiple attempts");
           //     }
               
           // }
+          if (tb.sendTelemetryJson(doc, len)) {
+              // serializeJson(doc, Serial);
+              // Serial.println();
+              // Serial.println("Telemery sent successfully");
+              break; // Exit if successful
+          } else {
+              Serial.println("Failed to send telemetry, retrying...");
+              vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+              if(attempt == 2){
+
+                // Serial.println((int)time(NULL));
+                Serial.println("Failed to send telemetry after multiple attempts");
+              }
+              
+          }
         }
       }
 
@@ -604,13 +611,17 @@ void WifiTask(void *pvParameters) {
 // }
 
 void TaskOTA(void *pvParameters) {
+  Serial.printf("Cur fw ver %s\n", CURRENT_FIRMWARE_VERSION);
+  esp_partition_t const * running = esp_ota_get_running_partition();
+  esp_partition_t const * configured = esp_ota_get_boot_partition();
+  esp_ota_set_boot_partition(running);
+
   while(1){
     if (!reconnect()) {
       Serial.println("Cant Reconect WIFI");
       return;
     }
     
-    Serial.printf("Cur fw ver %s\n", CURRENT_FIRMWARE_VERSION);
     if (!tb.connected()) {
       Serial.printf("Connecting to: (%s) with token (%s)\n", THINGSBOARD_SERVER, MAX30102_TOKEN);
       if (!tb.connect(THINGSBOARD_SERVER, MAX30102_TOKEN, THINGSBOARD_PORT)) {
@@ -618,10 +629,6 @@ void TaskOTA(void *pvParameters) {
         return;
       }
     }
-
-    esp_partition_t const * running = esp_ota_get_running_partition();
-    esp_partition_t const * configured = esp_ota_get_boot_partition();
-    esp_ota_set_boot_partition(running);
 
     // Serial.printf("running: %x, %d, %d, %d\n", running->address, running->encrypted, running->flash_chip->chip_id, running->size, running->subtype, running->type);
     // Serial.printf("configured: %x, %d, %d, %d\n", configured->address, configured->encrypted, configured->flash_chip->chip_id, configured->size, configured->subtype, configured->type);

@@ -50,7 +50,7 @@
 void requestTimedOut();
 void processSharedAttributeRequest(const JsonObjectConst &data) ;
 void processAttrSuccess(const JsonVariantConst &data, JsonDocument &response);
-// void processTeleSuccess(const JsonVariantConst &data, JsonDocument &response);
+void processTeleSuccess(const JsonVariantConst &data, JsonDocument &response);
 
 static bool diagnostic(void);
 void progress_callback(const size_t & current, const size_t & total);
